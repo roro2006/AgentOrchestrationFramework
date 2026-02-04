@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.venv/
+.env/
+
+# Build artifacts
+build/
+dist/
+
+# Project data/output
+obj/
+logs/
+data/
+state/
+progress/
+submission/
+grading/
+plans/
+research/
+specs/
+tickets/
+
+# Editor
+.DS_Store
