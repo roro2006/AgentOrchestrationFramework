@@ -161,6 +161,14 @@ def cmd_tracer(args):
             request = input(f"{Colors.YELLOW}> {Colors.RESET}")
             if request.strip():
                 tracer.start(request)
+    elif args.subcommand == "run":
+        if args.request:
+            tracer.run_all(args.request)
+        else:
+            print(f"\n{Colors.CYAN}What would you like to accomplish?{Colors.RESET}")
+            request = input(f"{Colors.YELLOW}> {Colors.RESET}")
+            if request.strip():
+                tracer.run_all(request)
 
     elif args.subcommand == "status":
         tracer.print_status()
@@ -259,6 +267,8 @@ Examples:
     tracer_sub = tracer_p.add_subparsers(dest="subcommand", required=True)
     tracer_start = tracer_sub.add_parser("start", help="Start new work")
     tracer_start.add_argument("request", nargs="?", help="What to accomplish")
+    tracer_run = tracer_sub.add_parser("run", help="Run full Tracer workflow without confirmation")
+    tracer_run.add_argument("request", nargs="?", help="What to accomplish")
     tracer_sub.add_parser("status", help="Show Tracer status")
     tracer_resume = tracer_sub.add_parser("resume", help="Resume a ticket")
     tracer_resume.add_argument("ticket_id", help="Ticket ID")

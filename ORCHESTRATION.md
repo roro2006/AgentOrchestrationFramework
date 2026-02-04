@@ -67,6 +67,9 @@ tracer-orch workflow rpi
 
 # Tracer workflow
 tracer-orch tracer start "Fix the CSV parsing bug"
+
+# Run full tracer flow without confirmation
+tracer-orch tracer run "Fix the CSV parsing bug"
 ```
 
 ## Local (no install)
@@ -283,6 +286,9 @@ Tracer provides a more intelligent workflow with prompt refinement, spec trackin
 ```bash
 # Start new work with interactive refinement
 ./run.py tracer start "Fix the CSV parsing bug"
+
+# Run full tracer flow without confirmation
+./run.py tracer run "Fix the CSV parsing bug"
 
 # Start interactively (prompts for input)
 ./run.py tracer start

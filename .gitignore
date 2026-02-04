@@ -24,5 +24,10 @@ research/
 specs/
 tickets/
 
+# Runtime state/swap
+controller/*.swp
+controller/auto_state.json
+controller/loop_state.json
+
 # Editor
 .DS_Store

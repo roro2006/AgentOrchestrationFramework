@@ -499,7 +499,7 @@ Run tests and check. Output JSON:
     # MAIN WORKFLOW
     # =========================================================================
 
-    def start(self, request: str):
+    def _run_flow(self, request: str, auto_confirm: bool):
         """Run full Tracer workflow."""
         print_header("TRAYCER", "Refine → Spec → Execute → Verify")
 
@@ -510,10 +510,11 @@ Run tests and check. Output JSON:
         spec = self.clarify(request)
 
         # Confirm
-        print(f"\n  {Colors.YELLOW}Create ticket and execute? [Y/n]{Colors.RESET}")
-        if input("  > ").strip().lower() in ['n', 'no']:
-            print(f"  {Colors.GRAY}Stopped. Spec saved.{Colors.RESET}")
-            return
+        if not auto_confirm:
+            print(f"\n  {Colors.YELLOW}Create ticket and execute? [Y/n]{Colors.RESET}")
+            if input("  > ").strip().lower() in ['n', 'no']:
+                print(f"  {Colors.GRAY}Stopped. Spec saved.{Colors.RESET}")
+                return
 
         # Create ticket
         ticket = self.create_ticket(spec)
@@ -531,6 +532,14 @@ Run tests and check. Output JSON:
         print(f"  Status: {ticket.status.value}")
         print(f"  Progress: {ticket.progress}%")
         print(f"{color}{'═' * 50}{Colors.RESET}")
+
+    def start(self, request: str):
+        """Run full Tracer workflow with confirmation."""
+        self._run_flow(request, auto_confirm=False)
+
+    def run_all(self, request: str):
+        """Run full Tracer workflow without confirmation."""
+        self._run_flow(request, auto_confirm=True)
 
     def print_status(self):
         """Print status."""
@@ -569,6 +578,8 @@ def main():
     subparsers = parser.add_subparsers(dest="command")
     start_p = subparsers.add_parser("start")
     start_p.add_argument("request", nargs="?")
+    run_p = subparsers.add_parser("run")
+    run_p.add_argument("request", nargs="?")
     subparsers.add_parser("status")
     resume_p = subparsers.add_parser("resume")
     resume_p.add_argument("ticket_id")
@@ -588,6 +599,14 @@ def main():
             request = input(f"{Colors.YELLOW}> {Colors.RESET}")
             if request.strip():
                 tracer.start(request)
+    elif args.command == "run":
+        if args.request:
+            tracer.run_all(args.request)
+        else:
+            print(f"\n{Colors.CYAN}What would you like to accomplish?{Colors.RESET}")
+            request = input(f"{Colors.YELLOW}> {Colors.RESET}")
+            if request.strip():
+                tracer.run_all(request)
 
     elif args.command == "status":
         tracer.print_status()

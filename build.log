@@ -1,0 +1,11 @@
+gcc -Wall -Wextra -O2 -std=c11 -c src/csv.c -o obj/csv.o
+gcc -Wall -Wextra -O2 -std=c11 -c src/hash.c -o obj/hash.o
+gcc -Wall -Wextra -O2 -std=c11 -c src/cards.c -o obj/cards.o
+gcc -Wall -Wextra -O2 -std=c11 -c src/labels.c -o obj/labels.o
+gcc -Wall -Wextra -O2 -std=c11 -c src/main_labels.c -o obj/main_labels.o
+gcc -Wall -Wextra -O2 -std=c11 obj/csv.o obj/hash.o obj/cards.o obj/labels.o obj/main_labels.o -o main_labels -lm
+gcc -Wall -Wextra -O2 -std=c11 -c src/train.c -o obj/train.o
+gcc -Wall -Wextra -O2 -std=c11 -c src/main_train.c -o obj/main_train.o
+gcc -Wall -Wextra -O2 -std=c11 obj/csv.o obj/hash.o obj/cards.o obj/train.o obj/main_train.o -o main_train -lm
+gcc -Wall -Wextra -O2 -std=c11 -c src/infer.c -o obj/infer.o
+gcc -Wall -Wextra -O2 -std=c11 obj/csv.o obj/hash.o obj/cards.o obj/train.o obj/infer.o -o infer -lm
