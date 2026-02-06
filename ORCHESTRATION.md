@@ -224,7 +224,37 @@ steps:
 MAX_THINKING_TOKENS=32000  # Set in .claude/settings.json
 TRACER_WORKSPACE=/path/to/project  # Override workspace detection
 ORCHESTRATOR_WORKSPACE=/path/to/project  # Alias for TRACER_WORKSPACE
+NOTE: Workspace is always constrained to the current working directory; if these point outside CWD they are ignored.
 ```
+
+## Usage Tracking
+
+Each CLI call logs estimated token usage to `state/usage.jsonl` and prints a per-step line:
+
+```
+[usage] rpi:research: model=gpt-5.1-codex-mini in≈1234 out≈567 total≈1801
+```
+
+## Model Routing
+
+By default, simpler steps route to a cheaper model. You can override:
+
+```bash
+ORCHESTRATOR_CHEAP_MODEL=gpt-5.1-codex-mini
+ORCHESTRATOR_CHEAP_LABELS=rpi:research,rpi:plan,tracer:clarify,tracer:ticket,tracer:execute:review,orch:locator
+```
+
+## Context Compaction & Retrieval
+
+Project prompt/rubric/research/plan are compacted automatically and, when possible, narrowed to the matching story section.
+Only project-specific files are affected; `.claude/commands/*` are never modified.
+
+Tracer also compacts long requests, clarifications, and spec context before sending to the model.
+
+## Local Caching
+
+CLI outputs are cached locally under `state/cache/` and reused for identical prompts.
+Disable caching by setting `ORCHESTRATOR_CACHE=0`.
 
 ---
 
@@ -424,7 +454,7 @@ $ ./run.py tracer start "Fix CSV parsing"
   Ready to create ticket and execute?
   [Y/n]: Y
 
-  [Continues with ticket creation and execution...]
+  [Execution now streams live agent updates during implement/review/correct/verify phases...]
 ```
 
 ## Comparison: RPI vs Tracer

@@ -20,20 +20,20 @@ from dataclasses import dataclass, field
 from typing import Optional
 from enum import Enum
 
-try:
-    from .utils import (
-        Colors, WORKSPACE, STATE_DIR,
-        run_cli, extract_score,
-        LoopState, load_state, save_state,
-        print_header, print_phase, print_progress,
-    )
-except ImportError:
-    from utils import (
-        Colors, WORKSPACE, STATE_DIR,
-        run_cli, extract_score,
-        LoopState, load_state, save_state,
-        print_header, print_phase, print_progress,
-    )
+    try:
+        from .utils import (
+            Colors, WORKSPACE, STATE_DIR,
+            run_cli, extract_score, compact_text, load_project_context,
+            LoopState, load_state, save_state,
+            print_header, print_phase, print_progress,
+        )
+    except ImportError:
+        from utils import (
+            Colors, WORKSPACE, STATE_DIR,
+            run_cli, extract_score, compact_text, load_project_context,
+            LoopState, load_state, save_state,
+            print_header, print_phase, print_progress,
+        )
 
 # ============================================================================
 # CONFIGURATION
@@ -173,6 +173,28 @@ class Tracer:
         (TICKETS_DIR / f"{ticket.id}.json").write_text(json.dumps(data, indent=2))
         self.tickets[ticket.id] = ticket
 
+    def _spec_context(self, spec: Spec, include: tuple[str, ...], max_chars: int) -> str:
+        spec_file = SPECS_DIR / f"{spec.id}.md"
+        if spec_file.exists():
+            doc = load_project_context(spec_file, max_chars=max_chars, story_id=spec.id, story_name=spec.title)
+            if doc:
+                return doc
+
+        parts = []
+        if "title" in include:
+            parts.append(f"TITLE: {spec.title}")
+        if "description" in include:
+            parts.append(f"DESCRIPTION: {spec.description}")
+        if "requirements" in include:
+            parts.append(f"REQUIREMENTS: {spec.requirements}")
+        if "acceptance" in include:
+            parts.append(f"ACCEPTANCE: {spec.acceptance_criteria}")
+        if "constraints" in include:
+            parts.append(f"CONSTRAINTS: {spec.constraints}")
+        if "out_of_scope" in include:
+            parts.append(f"OUT_OF_SCOPE: {spec.out_of_scope}")
+        return compact_text("\n".join(parts), max_chars)
+
     # =========================================================================
     # CLARIFICATION PHASE
     # =========================================================================
@@ -218,10 +240,11 @@ class Tracer:
 
     def _generate_questions(self, request: str) -> list[Clarification]:
         """Generate clarifying questions."""
+        request_text = compact_text(request, 2000)
         prompt = f'''
 Given this request, generate 3-4 clarifying questions.
 
-REQUEST: {request}
+REQUEST: {request_text}
 
 Categories: scope, approach, constraints, acceptance
 
@@ -230,7 +253,13 @@ Output JSON array:
 
 Only output the JSON.
 '''
-        output, _ = run_cli(self.cli, prompt, timeout=120, show_output=False)
+        output, _ = run_cli(
+            self.cli,
+            prompt,
+            timeout=120,
+            show_output=False,
+            usage_label="tracer:clarify:questions",
+        )
 
         try:
             match = re.search(r'\[[\s\S]*\]', output)
@@ -253,21 +282,29 @@ Only output the JSON.
             f"Q: {c.question}\nA: {c.answer or '[skipped]'}"
             for c in spec.clarifications
         ])
+        clarifications = compact_text(clarifications, 2000)
+        request_text = compact_text(spec.description, 2000)
 
         prompt = f'''
 Create a specification from this request and clarifications.
 
-REQUEST: {spec.description}
+REQUEST: {request_text}
 
-CLARIFICATIONS:
-{clarifications}
+        CLARIFICATIONS:
+        {clarifications}
 
 Output JSON:
 {{"title": "...", "description": "...", "requirements": [...], "acceptance_criteria": [...], "constraints": [...], "out_of_scope": [...]}}
 
 Only output JSON.
 '''
-        output, _ = run_cli(self.cli, prompt, timeout=120, show_output=False)
+        output, _ = run_cli(
+            self.cli,
+            prompt,
+            timeout=120,
+            show_output=False,
+            usage_label="tracer:clarify:spec",
+        )
 
         try:
             match = re.search(r'\{[\s\S]*\}', output)
@@ -301,16 +338,22 @@ Only output JSON.
         )
 
         # Generate tasks
+        spec_context = self._spec_context(spec, ("title", "requirements"), 2000)
         prompt = f'''
 Break this spec into tasks:
 
-SPEC: {spec.title}
-REQUIREMENTS: {spec.requirements}
+{spec_context}
 
 Output JSON array:
 [{{"name": "Task name", "type": "research|code|test"}}]
 '''
-        output, _ = run_cli(self.cli, prompt, timeout=120, show_output=False)
+        output, _ = run_cli(
+            self.cli,
+            prompt,
+            timeout=120,
+            show_output=False,
+            usage_label="tracer:ticket:tasks",
+        )
 
         try:
             match = re.search(r'\[[\s\S]*\]', output)
@@ -401,6 +444,17 @@ Output JSON array:
         save_state(self.state, STATE_FILE)
         return ticket
 
+    def _stream_updates(self, label: str):
+        """Stream live updates during execution."""
+        def _on_line(line: str):
+            display = line.rstrip()
+            if not display.strip():
+                return
+            if len(display) > 200:
+                display = display[:200] + "..."
+            print(f"  {Colors.GRAY}[{label}]{Colors.RESET} {display}")
+        return _on_line
+
     def _run_implementation(self, spec: Spec, ticket: Ticket) -> str:
         """Run implementation."""
         pending = [t for t in ticket.tasks if not t.get("done")]
@@ -408,19 +462,25 @@ Output JSON array:
             return ""
 
         task = pending[0]
+        spec_context = self._spec_context(spec, ("title", "requirements", "acceptance"), 3000)
         prompt = f'''
 Implement this task from the spec:
 
-SPEC: {spec.title}
-REQUIREMENTS: {spec.requirements}
-ACCEPTANCE: {spec.acceptance_criteria}
+{spec_context}
 
 TASK: {task["name"]}
 
-Follow the spec exactly. Do not add unrequested features.
-'''
+        Follow the spec exactly. Do not add unrequested features.
+        '''
         print(f"  {Colors.GRAY}Task: {task['name']}{Colors.RESET}")
-        output, code = run_cli(self.cli, prompt, timeout=600)
+        output, code = run_cli(
+            self.cli,
+            prompt,
+            timeout=600,
+            on_line=self._stream_updates("IMPLEMENT"),
+            show_output=False,
+            usage_label="tracer:execute:implement",
+        )
 
         if code == 0:
             task["done"] = True
@@ -433,21 +493,27 @@ Follow the spec exactly. Do not add unrequested features.
         if not output or len(output) < 100:
             return []
 
+        spec_context = self._spec_context(spec, ("title", "requirements", "out_of_scope"), 3000)
         prompt = f'''
 Check if this implementation follows the spec:
 
-SPEC: {spec.title}
-REQUIREMENTS: {spec.requirements}
-OUT OF SCOPE: {spec.out_of_scope}
+{spec_context}
 
 OUTPUT (excerpt): {output[:2000]}
 
 Look for: OFF_TOPIC, WRONG_APPROACH, INCOMPLETE, OVER_ENGINEERED, SPEC_VIOLATION
 
-Output JSON array of deviations (empty if none):
-[{{"type": "...", "description": "...", "correction": "..."}}]
-'''
-        result, _ = run_cli(self.cli, prompt, timeout=120, show_output=False)
+        Output JSON array of deviations (empty if none):
+        [{{"type": "...", "description": "...", "correction": "..."}}]
+        '''
+        result, _ = run_cli(
+            self.cli,
+            prompt,
+            timeout=120,
+            on_line=self._stream_updates("REVIEW"),
+            show_output=False,
+            usage_label="tracer:execute:review",
+        )
 
         try:
             match = re.search(r'\[[\s\S]*?\]', result)
@@ -464,28 +530,44 @@ Output JSON array of deviations (empty if none):
         if not corrections:
             return False
 
+        spec_context = self._spec_context(spec, ("title", "requirements", "constraints"), 2000)
         prompt = f'''
 Apply these corrections to fix deviations:
 
-SPEC: {spec.title}
+{spec_context}
 CORRECTIONS: {corrections}
 
-Fix the issues and verify against the spec.
-'''
-        _, code = run_cli(self.cli, prompt, timeout=600)
+        Fix the issues and verify against the spec.
+        '''
+        _, code = run_cli(
+            self.cli,
+            prompt,
+            timeout=600,
+            on_line=self._stream_updates("CORRECT"),
+            show_output=False,
+            usage_label="tracer:execute:correct",
+        )
         return code == 0
 
     def _verify_completion(self, spec: Spec) -> bool:
         """Verify acceptance criteria are met."""
+        acceptance = compact_text("\n".join(spec.acceptance_criteria), 1500)
         prompt = f'''
 Verify all acceptance criteria are met:
 
-{spec.acceptance_criteria}
+{acceptance}
 
-Run tests and check. Output JSON:
-{{"all_met": true/false}}
-'''
-        output, _ = run_cli(self.cli, prompt, timeout=300, show_output=False)
+        Run tests and check. Output JSON:
+        {{"all_met": true/false}}
+        '''
+        output, _ = run_cli(
+            self.cli,
+            prompt,
+            timeout=300,
+            on_line=self._stream_updates("VERIFY"),
+            show_output=False,
+            usage_label="tracer:execute:verify",
+        )
 
         try:
             match = re.search(r'\{[\s\S]*\}', output)

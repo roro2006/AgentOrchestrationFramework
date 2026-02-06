@@ -145,7 +145,12 @@ class Orchestrator:
         task.status = "running"
         self._print_task_start(task, agent)
 
-        output, code = run_cli(self.cli, task.prompt, timeout=timeout)
+        output, code = run_cli(
+            self.cli,
+            task.prompt,
+            timeout=timeout,
+            usage_label=f"orch:{task.agent}",
+        )
 
         task.output = output
         if code == 0:

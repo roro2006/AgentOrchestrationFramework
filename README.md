@@ -42,6 +42,13 @@ python3 controller/run.py rpi reset
 ```bash
 pip install -e .
 
+# Run from your project folder to keep outputs local
+cd /path/to/your/project
+
+# Usage tracking
+# Per-step usage is printed and logged to state/usage.jsonl
+# Simple tasks auto-route to a cheaper model; see ORCHESTRATION.md for overrides
+
 # Show status
 tracer-orch status
 

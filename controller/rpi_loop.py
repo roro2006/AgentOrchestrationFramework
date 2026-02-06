@@ -14,14 +14,14 @@ from datetime import datetime
 try:
     from .utils import (
         Colors, WORKSPACE, STATE_DIR,
-        run_cli, extract_score, load_command_prompt,
+        run_cli, extract_score, load_command_prompt, load_project_context,
         LoopState, load_state, save_state,
         get_current_story, print_header, print_phase, print_score,
     )
 except ImportError:
     from utils import (
         Colors, WORKSPACE, STATE_DIR,
-        run_cli, extract_score, load_command_prompt,
+        run_cli, extract_score, load_command_prompt, load_project_context,
         LoopState, load_state, save_state,
         get_current_story, print_header, print_phase, print_score,
     )
@@ -51,8 +51,13 @@ DEFAULT_TIMEOUT = 600
 def get_researcher_prompt(story: dict, prev_grading: str = "") -> str:
     """Generate researcher prompt."""
     cmd_template = load_command_prompt("research")
-    project_prompt = PROJECT_PROMPT_FILE.read_text() if PROJECT_PROMPT_FILE.exists() else ""
-    rubric = RUBRIC_FILE.read_text() if RUBRIC_FILE.exists() else ""
+    project_prompt = load_project_context(
+        PROJECT_PROMPT_FILE,
+        max_chars=5000,
+        story_id=story.get("id"),
+        story_name=story.get("name"),
+    )
+    rubric = load_project_context(RUBRIC_FILE, max_chars=1500)
 
     feedback = ""
     if prev_grading:
@@ -95,8 +100,8 @@ def get_planner_prompt(story: dict) -> str:
     cmd_template = load_command_prompt("plan")
 
     research_file = RESEARCH_DIR / f"{story.get('id', 'US-1')}_research.md"
-    research = research_file.read_text() if research_file.exists() else "No research found."
-    rubric = RUBRIC_FILE.read_text() if RUBRIC_FILE.exists() else ""
+    research = load_project_context(research_file, max_chars=4000) or "No research found."
+    rubric = load_project_context(RUBRIC_FILE, max_chars=2000)
 
     return f'''
 PLANNER PHASE - {story.get("id", "?")}
@@ -121,7 +126,7 @@ def get_implementer_prompt(story: dict, version: int) -> str:
     cmd_template = load_command_prompt("implement")
 
     plan_file = PLANS_DIR / f"{story.get('id', 'US-1')}_plan.md"
-    plan = plan_file.read_text() if plan_file.exists() else "No plan found."
+    plan = load_project_context(plan_file, max_chars=6000) or "No plan found."
 
     return f'''
 IMPLEMENTER PHASE - {story.get("id", "?")} V{version}
@@ -143,8 +148,8 @@ def get_grader_prompt(story: dict, version: int) -> str:
     cmd_template = load_command_prompt("grade")
 
     plan_file = PLANS_DIR / f"{story.get('id', 'US-1')}_plan.md"
-    plan = plan_file.read_text() if plan_file.exists() else ""
-    rubric = RUBRIC_FILE.read_text() if RUBRIC_FILE.exists() else ""
+    plan = load_project_context(plan_file, max_chars=4000)
+    rubric = load_project_context(RUBRIC_FILE, max_chars=2500)
 
     return f'''
 GRADER PHASE - {story.get("id", "?")} V{version}
@@ -184,7 +189,7 @@ def run_phase(cli: str, phase: str, prompt: str, output_file: Path,
     """Run a single phase."""
     print_phase(phase)
 
-    output, code = run_cli(cli, prompt, timeout=timeout)
+    output, code = run_cli(cli, prompt, timeout=timeout, usage_label=f"rpi:{phase.lower()}")
 
     if output_file.exists():
         print(f"  {Colors.GREEN}✓ {output_file.name} created{Colors.RESET}")
